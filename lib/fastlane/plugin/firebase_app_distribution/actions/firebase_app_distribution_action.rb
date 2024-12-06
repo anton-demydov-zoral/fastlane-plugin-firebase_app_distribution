@@ -174,25 +174,81 @@ module Fastlane
       end
 
       def self.get_binary_path(platform, params)
+        UI.message "Invoking `get_binary_path` with platform: #{platform}, params: #{params.inspect}"
+      
         if platform == :ios
-          return params[:ipa_path] ||
-                 Actions.lane_context[SharedValues::IPA_OUTPUT_PATH] ||
-                 Dir["*.ipa"].sort_by { |x| File.mtime(x) }.last
-        end
-
-        if platform == :android
-          return params[:apk_path] || params[:android_artifact_path] if params[:apk_path] || params[:android_artifact_path]
-
-          if params[:android_artifact_type] == 'AAB'
-            return Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH] ||
-                   Dir["*.aab"].last ||
-                   Dir[File.join("app", "build", "outputs", "bundle", "release", "app-release.aab")].last
+          UI.message "Resolving iOS binary path..."
+          binary_path = params[:ipa_path] ||
+                        Actions.lane_context[SharedValues::IPA_OUTPUT_PATH] ||
+                        Dir["*.ipa"].sort_by { |x| File.mtime(x) }.last
+      
+          if binary_path
+            UI.message "Resolved iOS binary path: #{binary_path}"
+          else
+            UI.error "Failed to resolve iOS binary path. Ensure the IPA file exists and paths are correctly configured."
           end
-
-          return Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH] ||
-                 Dir["*.apk"].last ||
-                 Dir[File.join("app", "build", "outputs", "apk", "release", "app-release.apk")].last
+      
+          return binary_path
         end
+      
+        if platform == :android
+          UI.message "Resolving Android binary path..."
+          
+          # Check for params[:apk_path] or params[:android_artifact_path]
+          if params[:apk_path] || params[:android_artifact_path]
+            binary_path = params[:apk_path] || params[:android_artifact_path]
+            if File.exist?(binary_path)
+              UI.message "Resolved binary path from params: #{binary_path}"
+              return binary_path
+            else
+              UI.error "Binary specified in params does not exist: #{binary_path}"
+            end
+          end
+      
+          # Handle AAB artifact type
+          if params[:android_artifact_type] == 'AAB'
+            UI.message "Artifact type is AAB. Attempting to resolve path for AAB file..."
+            binary_path = Actions.lane_context[SharedValues::GRADLE_AAB_OUTPUT_PATH] ||
+                          Dir["*.aab"].last ||
+                          Dir[File.join("app", "build", "outputs", "bundle", "release", "app-release.aab")].last
+      
+            if binary_path
+              if File.exist?(binary_path)
+                UI.message "Resolved AAB binary path: #{binary_path}"
+                return binary_path
+              else
+                UI.error "Resolved AAB binary does not exist at: #{binary_path}"
+              end
+            else
+              UI.error "Failed to resolve AAB binary path. Check Gradle build output or artifact configuration."
+            end
+          end
+      
+          # Handle APK artifact type (default)
+          UI.message "Artifact type is APK. Attempting to resolve path for APK file..."
+          binary_path = Actions.lane_context[SharedValues::GRADLE_APK_OUTPUT_PATH] ||
+                        Dir["*.apk"].last ||
+                        Dir[File.join("app", "build", "outputs", "apk", "release", "app-release.apk")].last
+      
+          if binary_path
+            if File.exist?(binary_path)
+              UI.message "Resolved APK binary path: #{binary_path}"
+              return binary_path
+            else
+              UI.error "Resolved APK binary does not exist at: #{binary_path}"
+            end
+          else
+            UI.error "Failed to resolve APK binary path. Check Gradle build output or artifact configuration."
+          end
+      
+          # If no binary path is resolved
+          UI.error "Failed to resolve Android binary path for platform: #{platform}. Check logs for details."
+          return nil
+        end
+      
+        # Unsupported platform
+        UI.error "Unsupported platform specified: #{platform}. Only :ios and :android are supported."
+        nil
       end
 
       def self.get_upload_timeout(params)
