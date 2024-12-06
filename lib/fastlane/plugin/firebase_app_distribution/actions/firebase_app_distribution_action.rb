@@ -174,6 +174,7 @@ module Fastlane
       end
 
       def self.get_binary_path(platform, params)
+        platform = platform.to_sym
         UI.message "Invoking `get_binary_path` with platform: #{platform}, params: #{params.inspect}"
       
         if platform == :ios
